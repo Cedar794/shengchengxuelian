@@ -1,0 +1,177 @@
+const express = require('express');
+const router = express.Router();
+const db = require('../database');
+const { auth, optionalAuth } = require('../middleware/auth');
+const { body, validationResult } = require('express-validator');
+
+// Get all materials with filters
+router.get('/', optionalAuth, (req, res) => {
+  try {
+    const { category, type, search, page = 1, limit = 20 } = req.query;
+    const offset = (page - 1) * limit;
+
+    let query = `
+      SELECT m.*, u.nickname as uploader_name, u.school as uploader_school
+      FROM materials m
+      JOIN users u ON m.uploader_id = u.id
+      WHERE m.status = 'active'
+    `;
+    const params = [];
+
+    if (category) {
+      query += ' AND m.category = ?';
+      params.push(category);
+    }
+    if (type) {
+      query += ' AND m.type = ?';
+      params.push(type);
+    }
+    if (search) {
+      query += ' AND (m.title LIKE ? OR m.description LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`);
+    }
+
+    query += ' ORDER BY m.download_count DESC, m.created_at DESC LIMIT ? OFFSET ?';
+    params.push(parseInt(limit), offset);
+
+    const materials = db.prepare(query).all(...params);
+
+    // Parse JSON fields
+    materials.forEach(material => {
+      if (material.tags) material.tags = JSON.parse(material.tags);
+    });
+
+    res.json({ materials, page: parseInt(page), limit: parseInt(limit) });
+  } catch (error) {
+    console.error('Get materials error:', error);
+    res.status(500).json({ error: 'Failed to get materials' });
+  }
+});
+
+// Get single material
+router.get('/:id', (req, res) => {
+  try {
+    const material = db.prepare(`
+      SELECT m.*, u.nickname as uploader_name, u.avatar as uploader_avatar, u.school as uploader_school
+      FROM materials m
+      JOIN users u ON m.uploader_id = u.id
+      WHERE m.id = ?
+    `).get(req.params.id);
+
+    if (!material) {
+      return res.status(404).json({ error: 'Material not found' });
+    }
+
+    // Parse tags
+    if (material.tags) material.tags = JSON.parse(material.tags);
+
+    res.json({ material });
+  } catch (error) {
+    console.error('Get material error:', error);
+    res.status(500).json({ error: 'Failed to get material' });
+  }
+});
+
+// Create material
+router.post('/', auth, [
+  body('title').notEmpty().withMessage('Title is required'),
+  body('description').notEmpty().withMessage('Description is required'),
+  body('type').notEmpty().withMessage('Type is required'),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { title, description, type, file_url, file_size, category, tags } = req.body;
+
+    const result = db.prepare(`
+      INSERT INTO materials (title, description, type, file_url, file_size, uploader_id, category, tags)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(title, description, type, file_url, file_size, req.user.id, category, tags ? JSON.stringify(tags) : null);
+
+    const material = db.prepare('SELECT * FROM materials WHERE id = ?').get(result.lastInsertRowid);
+
+    res.status(201).json({ message: 'Material uploaded successfully', material });
+  } catch (error) {
+    console.error('Create material error:', error);
+    res.status(500).json({ error: 'Failed to create material' });
+  }
+});
+
+// Record download
+router.post('/:id/download', auth, (req, res) => {
+  try {
+    db.prepare('UPDATE materials SET download_count = download_count + 1 WHERE id = ?').run(req.params.id);
+
+    const material = db.prepare('SELECT file_url FROM materials WHERE id = ?').get(req.params.id);
+
+    if (!material) {
+      return res.status(404).json({ error: 'Material not found' });
+    }
+
+    res.json({ message: 'Download recorded', file_url: material.file_url });
+  } catch (error) {
+    console.error('Record download error:', error);
+    res.status(500).json({ error: 'Failed to record download' });
+  }
+});
+
+// Update material
+router.put('/:id', auth, (req, res) => {
+  try {
+    const material = db.prepare('SELECT * FROM materials WHERE id = ?').get(req.params.id);
+
+    if (!material) {
+      return res.status(404).json({ error: 'Material not found' });
+    }
+
+    if (material.uploader_id !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized to update this material' });
+    }
+
+    const { title, description, category, tags } = req.body;
+
+    db.prepare(`
+      UPDATE materials
+      SET title = COALESCE(?, title),
+          description = COALESCE(?, description),
+          category = COALESCE(?, category),
+          tags = COALESCE(?, tags),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(title, description, category, tags ? JSON.stringify(tags) : null, req.params.id);
+
+    const updatedMaterial = db.prepare('SELECT * FROM materials WHERE id = ?').get(req.params.id);
+
+    res.json({ message: 'Material updated successfully', material: updatedMaterial });
+  } catch (error) {
+    console.error('Update material error:', error);
+    res.status(500).json({ error: 'Failed to update material' });
+  }
+});
+
+// Delete material
+router.delete('/:id', auth, (req, res) => {
+  try {
+    const material = db.prepare('SELECT * FROM materials WHERE id = ?').get(req.params.id);
+
+    if (!material) {
+      return res.status(404).json({ error: 'Material not found' });
+    }
+
+    if (material.uploader_id !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized to delete this material' });
+    }
+
+    db.prepare('UPDATE materials SET status = "deleted" WHERE id = ?').run(req.params.id);
+
+    res.json({ message: 'Material deleted successfully' });
+  } catch (error) {
+    console.error('Delete material error:', error);
+    res.status(500).json({ error: 'Failed to delete material' });
+  }
+});
+
+module.exports = router;

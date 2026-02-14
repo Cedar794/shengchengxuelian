@@ -1,0 +1,206 @@
+const express = require('express');
+const router = express.Router();
+const db = require('../database');
+const { auth } = require('../middleware/auth');
+
+// AI chat endpoint (returns simulated responses for now)
+router.post('/chat', auth, (req, res) => {
+  try {
+    const { message, context } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    // Get or create AI session
+    let session = db.prepare('SELECT * FROM ai_sessions WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1').get(req.user.id);
+
+    if (!session) {
+      const result = db.prepare('INSERT INTO ai_sessions (user_id, context) VALUES (?, ?)').run(req.user.id, context ? JSON.stringify(context) : null);
+      session = db.prepare('SELECT * FROM ai_sessions WHERE id = ?').get(result.lastInsertRowid);
+    }
+
+    // Save user message
+    db.prepare('INSERT INTO ai_messages (session_id, role, content) VALUES (?, ?, ?)').run(session.id, 'user', message);
+
+    // Update message count
+    db.prepare('UPDATE ai_sessions SET message_count = message_count + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(session.id);
+
+    // Generate simulated AI response
+    const aiResponse = generateSimulatedResponse(message, context);
+
+    // Save AI response
+    db.prepare('INSERT INTO ai_messages (session_id, role, content) VALUES (?, ?, ?)').run(session.id, 'assistant', aiResponse);
+
+    res.json({
+      response: aiResponse,
+      sessionId: session.id
+    });
+  } catch (error) {
+    console.error('AI chat error:', error);
+    res.status(500).json({ error: 'Failed to process chat message' });
+  }
+});
+
+// Get chat history
+router.get('/chat/history', auth, (req, res) => {
+  try {
+    const session = db.prepare('SELECT * FROM ai_sessions WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1').get(req.user.id);
+
+    if (!session) {
+      return res.json({ messages: [] });
+    }
+
+    const messages = db.prepare('SELECT * FROM ai_messages WHERE session_id = ? ORDER BY created_at ASC').all(session.id);
+
+    res.json({ messages, sessionId: session.id });
+  } catch (error) {
+    console.error('Get chat history error:', error);
+    res.status(500).json({ error: 'Failed to get chat history' });
+  }
+});
+
+// Clear chat history
+router.delete('/chat/history', auth, (req, res) => {
+  try {
+    const session = db.prepare('SELECT * FROM ai_sessions WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1').get(req.user.id);
+
+    if (session) {
+      db.prepare('DELETE FROM ai_messages WHERE session_id = ?').run(session.id);
+      db.prepare('UPDATE ai_sessions SET message_count = 0 WHERE id = ?').run(session.id);
+    }
+
+    res.json({ message: 'Chat history cleared' });
+  } catch (error) {
+    console.error('Clear chat history error:', error);
+    res.status(500).json({ error: 'Failed to clear chat history' });
+  }
+});
+
+// Simulated AI response generator (placeholder for real AI integration)
+function generateSimulatedResponse(message, context) {
+  const lowerMessage = message.toLowerCase();
+
+  // Simple pattern matching for common queries
+  if (lowerMessage.includes('活动') || lowerMessage.includes('activity')) {
+    return '您可以前往"校园通-活动公告"板块查看最新活动。我为您推荐一些可能感兴趣的活动，或者您想要搜索特定类型的活动吗？';
+  }
+
+  if (lowerMessage.includes('预约') || lowerMessage.includes('reserve') || lowerMessage.includes('venue')) {
+    return '场馆预约功能在"校园通-场馆预约"中。请告诉我您想预约什么类型的场馆以及时间，我可以帮您查询可用时段。';
+  }
+
+  if (lowerMessage.includes('二手') || lowerMessage.includes('交易') || lowerMessage.includes('buy') || lowerMessage.includes('sell')) {
+    return '"生活汇-二手交易"板块有很多优质商品。您可以发布想要出售的物品，或者浏览其他同学发布的商品。有什么特别想找的物品吗？';
+  }
+
+  if (lowerMessage.includes('兼职') || lowerMessage.includes('part-time') || lowerMessage.includes('job')) {
+    return '"生活汇-兼职平台"提供家教和技能变现两种服务。您可以发布您的技能服务，或者浏览现有的兼职需求。';
+  }
+
+  if (lowerMessage.includes('社群') || lowerMessage.includes('group') || lowerMessage.includes('community')) {
+    return '"校际圈-主题社群"有很多有趣的社群，比如学习小组、运动联盟等。根据您的兴趣标签，我为您推荐一些可能感兴趣的社群。';
+  }
+
+  if (lowerMessage.includes('项目') || lowerMessage.includes('协作') || lowerMessage.includes('project')) {
+    return '"校际圈-跨校项目协作"可以帮助您找到志同道合的伙伴。您可以发起自己的项目，或者申请加入其他感兴趣的项目。';
+  }
+
+  if (lowerMessage.includes('资料') || lowerMessage.includes('material') || lowerMessage.includes('resource')) {
+    return '"校园通-资料分享"有丰富的学习资源，包括竞赛指南、PPT模板、工具教程等。您也可以上传分享优质资料。';
+  }
+
+  if (lowerMessage.includes('你好') || lowerMessage.includes('hello') || lowerMessage.includes('hi')) {
+    return '你好呀！我是小联，申城学联的AI助手。有什么我可以帮您的吗？您可以问我关于活动、交易、社群、项目等问题。';
+  }
+
+  if (lowerMessage.includes('谢谢') || lowerMessage.includes('thank')) {
+    return '不客气！很高兴能帮到您。还有其他问题吗？';
+  }
+
+  // Default response
+  return '感谢您的提问！作为申城学联的AI助手，我可以帮您查询活动信息、场馆预约、二手交易、社群、项目协作等内容。请告诉我您具体想了解什么？';
+}
+
+// Get recommendations based on user profile
+router.get('/recommendations', auth, (req, res) => {
+  try {
+    const { type } = req.query; // activities, groups, projects
+
+    const user = db.prepare('SELECT tags, school FROM users WHERE id = ?').get(req.user.id);
+
+    if (!user || !user.tags) {
+      return res.json({ recommendations: [] });
+    }
+
+    const userTags = JSON.parse(user.tags);
+    let recommendations = [];
+
+    if (type === 'activities') {
+      recommendations = db.prepare(`
+        SELECT a.*, 'activity' as type
+        FROM activities a
+        WHERE a.status = 'open'
+        ORDER BY a.created_at DESC
+        LIMIT 5
+      `).all();
+    } else if (type === 'groups') {
+      recommendations = db.prepare(`
+        SELECT g.*, 'group' as type
+        FROM groups g
+        WHERE g.status = 'active' AND g.type = 'public'
+        ORDER BY g.member_count DESC
+        LIMIT 5
+      `).all();
+    } else if (type === 'projects') {
+      recommendations = db.prepare(`
+        SELECT p.*, 'project' as type
+        FROM projects p
+        WHERE p.status = 'recruiting'
+        ORDER BY p.created_at DESC
+        LIMIT 5
+      `).all();
+    } else {
+      // Mixed recommendations
+      const activities = db.prepare(`
+        SELECT a.*, 'activity' as type
+        FROM activities a
+        WHERE a.status = 'open'
+        ORDER BY a.created_at DESC
+        LIMIT 3
+      `).all();
+
+      const groups = db.prepare(`
+        SELECT g.*, 'group' as type
+        FROM groups g
+        WHERE g.status = 'active' AND g.type = 'public'
+        ORDER BY g.member_count DESC
+        LIMIT 3
+      `).all();
+
+      const projects = db.prepare(`
+        SELECT p.*, 'project' as type
+        FROM projects p
+        WHERE p.status = 'recruiting'
+        ORDER BY p.created_at DESC
+        LIMIT 3
+      `).all();
+
+      recommendations = [...activities, ...groups, ...projects];
+    }
+
+    // Parse JSON fields
+    recommendations.forEach(item => {
+      if (item.tags) item.tags = JSON.parse(item.tags);
+      if (item.target_tags) item.target_tags = JSON.parse(item.target_tags);
+      if (item.required_skills) item.required_skills = JSON.parse(item.required_skills);
+    });
+
+    res.json({ recommendations });
+  } catch (error) {
+    console.error('Get recommendations error:', error);
+    res.status(500).json({ error: 'Failed to get recommendations' });
+  }
+});
+
+module.exports = router;

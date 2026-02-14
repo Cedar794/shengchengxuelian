@@ -1,0 +1,315 @@
+const express = require('express');
+const router = express.Router();
+const db = require('../database');
+const { auth, optionalAuth } = require('../middleware/auth');
+const { body, validationResult } = require('express-validator');
+
+// Admin check function
+const checkAdmin = (req, res, next) => {
+  if (req.user && req.user.role === 'admin') {
+    next();
+  } else {
+    res.status(403).json({ error: '需要管理员权限' });
+  }
+};
+
+// Get all activities with filters
+router.get('/', optionalAuth, async (req, res) => {
+  try {
+    const { type, status, school, page = 1, limit = 20 } = req.query;
+    const offset = (page - 1) * limit;
+
+    let query = `
+      SELECT a.*, u.nickname as publisher_name, u.school as publisher_school,
+             (SELECT COUNT(*) FROM activity_registrations WHERE activity_id = a.id) as registration_count
+      FROM activities a
+      JOIN users u ON a.publisher_id = u.id
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (type) {
+      query += ' AND a.type = ?';
+      params.push(type);
+    }
+    if (status) {
+      query += ' AND a.status = ?';
+      params.push(status);
+    }
+    if (school) {
+      query += ' AND (a.target_schools = ? OR a.target_schools = "all")';
+      params.push(school);
+    }
+
+    query += ' ORDER BY a.created_at DESC LIMIT ? OFFSET ?';
+    params.push(parseInt(limit), offset);
+
+    const activities = await db.prepare(query).all(...params);
+
+    // Parse JSON fields
+    activities.forEach(activity => {
+      if (activity.target_tags) {
+        try {
+          activity.target_tags = JSON.parse(activity.target_tags);
+        } catch (e) {
+          // If not valid JSON, keep as string
+          if (typeof activity.target_tags === 'string') {
+            activity.target_tags = activity.target_tags.split(',').map(s => s.trim());
+          }
+        }
+      }
+      if (activity.target_schools) {
+        try {
+          activity.target_schools = JSON.parse(activity.target_schools);
+        } catch (e) {
+          // If not valid JSON, keep as string
+          if (typeof activity.target_schools === 'string') {
+            activity.target_schools = activity.target_schools.split(',').map(s => s.trim());
+          }
+        }
+      }
+    });
+
+    res.json({ activities, page: parseInt(page), limit: parseInt(limit) });
+  } catch (error) {
+    console.error('Get activities error:', error);
+    res.status(500).json({ error: 'Failed to get activities' });
+  }
+});
+
+// Get recommended activities (based on user tags)
+router.get('/recommended', auth, async (req, res) => {
+  try {
+    const user = await db.prepare('SELECT tags, school FROM users WHERE id = ?').get(req.user.id);
+    if (!user || !user.tags) {
+      return res.json({ activities: [] });
+    }
+
+    let userTags;
+    try {
+      userTags = JSON.parse(user.tags);
+    } catch (e) {
+      userTags = [];
+    }
+
+    // Find activities matching user tags
+    const activities = await db.prepare(`
+      SELECT a.*, u.nickname as publisher_name, u.school as publisher_school,
+             (SELECT COUNT(*) FROM activity_registrations WHERE activity_id = a.id) as registration_count
+      FROM activities a
+      JOIN users u ON a.publisher_id = u.id
+      WHERE a.status = 'open'
+      ORDER BY a.created_at DESC
+      LIMIT 10
+    `).all();
+
+    // Filter activities based on tag matching
+    const recommended = activities.filter(activity => {
+      if (!activity.target_tags) return true;
+      try {
+        const activityTags = JSON.parse(activity.target_tags);
+        return activityTags.some(tag => userTags.includes(tag));
+      } catch (e) {
+        return true;
+      }
+    });
+
+    res.json({ activities: recommended });
+  } catch (error) {
+    console.error('Get recommended activities error:', error);
+    res.status(500).json({ error: 'Failed to get recommended activities' });
+  }
+});
+
+// Get single activity
+router.get('/:id', optionalAuth, async (req, res) => {
+  try {
+    const activity = await db.prepare(`
+      SELECT a.*, u.nickname as publisher_name, u.school as publisher_school, u.avatar as publisher_avatar
+      FROM activities a
+      JOIN users u ON a.publisher_id = u.id
+      WHERE a.id = ?
+    `).get(req.params.id);
+
+    if (!activity) {
+      return res.status(404).json({ error: 'Activity not found' });
+    }
+
+    // Parse JSON fields
+    if (activity.target_tags) activity.target_tags = JSON.parse(activity.target_tags);
+    if (activity.target_schools) activity.target_schools = JSON.parse(activity.target_schools);
+
+    // Get registrations
+    const registrations = await db.prepare(`
+      SELECT ar.*, u.nickname, u.avatar, u.school
+      FROM activity_registrations ar
+      JOIN users u ON ar.user_id = u.id
+      WHERE ar.activity_id = ?
+    `).all(req.params.id);
+
+    // Check if current user is registered
+    let isRegistered = false;
+    if (req.user) {
+      const registration = await db.prepare('SELECT * FROM activity_registrations WHERE activity_id = ? AND user_id = ?').get(req.params.id, req.user.id);
+      isRegistered = !!registration;
+    }
+
+    res.json({ activity, registrations, isRegistered });
+  } catch (error) {
+    console.error('Get activity error:', error);
+    res.status(500).json({ error: 'Failed to get activity' });
+  }
+});
+
+// Create activity
+router.post('/', auth, checkAdmin, [
+  body('title').notEmpty().withMessage('Title is required'),
+  body('description').notEmpty().withMessage('Description is required'),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { title, description, type, location, event_time, registration_deadline, max_participants, target_schools, target_tags, cover_image } = req.body;
+
+    const result = await db.prepare(`
+      INSERT INTO activities (title, description, type, location, event_time, registration_deadline, max_participants, publisher_id, target_schools, target_tags, cover_image)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(title, description, type || 'general', location, event_time, registration_deadline, max_participants, req.user.id, target_schools ? JSON.stringify(target_schools) : null, target_tags ? JSON.stringify(target_tags) : null, cover_image);
+
+    const activity = await db.prepare('SELECT * FROM activities WHERE id = ?').get(result.lastInsertRowid);
+
+    res.status(201).json({ message: 'Activity created successfully', activity });
+  } catch (error) {
+    console.error('Create activity error:', error);
+    res.status(500).json({ error: 'Failed to create activity' });
+  }
+});
+
+// Register for activity
+router.post('/:id/register', auth, async (req, res) => {
+  try {
+    const activity = await db.prepare('SELECT * FROM activities WHERE id = ?').get(req.params.id);
+
+    if (!activity) {
+      return res.status(404).json({ error: 'Activity not found' });
+    }
+
+    if (activity.status !== 'open') {
+      return res.status(400).json({ error: 'Registration is closed' });
+    }
+
+    if (activity.max_participants && activity.current_participants >= activity.max_participants) {
+      return res.status(400).json({ error: 'Activity is full' });
+    }
+
+    // Check if already registered
+    const existing = await db.prepare('SELECT * FROM activity_registrations WHERE activity_id = ? AND user_id = ?').get(req.params.id, req.user.id);
+    if (existing) {
+      return res.status(400).json({ error: 'Already registered' });
+    }
+
+    // Register
+    await db.prepare('INSERT INTO activity_registrations (activity_id, user_id) VALUES (?, ?)').run(req.params.id, req.user.id);
+
+    // Update participant count
+    await db.prepare('UPDATE activities SET current_participants = current_participants + 1 WHERE id = ?').run(req.params.id);
+
+    res.json({ message: 'Registration successful' });
+  } catch (error) {
+    console.error('Register for activity error:', error);
+    res.status(500).json({ error: 'Failed to register for activity' });
+  }
+});
+
+// Cancel registration
+router.delete('/:id/register', auth, async (req, res) => {
+  try {
+    const result = await db.prepare('DELETE FROM activity_registrations WHERE activity_id = ? AND user_id = ?').run(req.params.id, req.user.id);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Registration not found' });
+    }
+
+    // Update participant count
+    await db.prepare('UPDATE activities SET current_participants = current_participants - 1 WHERE id = ?').run(req.params.id);
+
+    res.json({ message: 'Registration cancelled successfully' });
+  } catch (error) {
+    console.error('Cancel registration error:', error);
+    res.status(500).json({ error: 'Failed to cancel registration' });
+  }
+});
+
+// Update activity
+router.put('/:id', auth, checkAdmin, async (req, res) => {
+  try {
+    const activity = await db.prepare('SELECT * FROM activities WHERE id = ?').get(req.params.id);
+
+    if (!activity) {
+      return res.status(404).json({ error: 'Activity not found' });
+    }
+
+    // Check permission: only admin can update (already checked by checkAdmin middleware)
+    // This check is redundant but kept for clarity
+
+    const { title, description, type, location, event_time, registration_deadline, max_participants, status, target_schools, target_tags, cover_image } = req.body;
+
+    await db.prepare(`
+      UPDATE activities
+      SET title = ?, description = ?, type = ?, location = ?, event_time = ?,
+          registration_deadline = ?, max_participants = ?, status = ?,
+          target_schools = ?, target_tags = ?, cover_image = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(
+      title || activity.title,
+      description || activity.description,
+      type || activity.type,
+      location || activity.location,
+      event_time || activity.event_time,
+      registration_deadline || activity.registration_deadline,
+      max_participants || activity.max_participants,
+      status || activity.status,
+      target_schools ? JSON.stringify(target_schools) : activity.target_schools,
+      target_tags ? JSON.stringify(target_tags) : activity.target_tags,
+      cover_image || activity.cover_image,
+      req.params.id
+    );
+
+    const updatedActivity = await db.prepare('SELECT * FROM activities WHERE id = ?').get(req.params.id);
+
+    res.json({ message: 'Activity updated successfully', activity: updatedActivity });
+  } catch (error) {
+    console.error('Update activity error:', error);
+    res.status(500).json({ error: 'Failed to update activity' });
+  }
+});
+
+// Delete activity
+router.delete('/:id', auth, checkAdmin, async (req, res) => {
+  try {
+    const activity = await db.prepare('SELECT * FROM activities WHERE id = ?').get(req.params.id);
+
+    if (!activity) {
+      return res.status(404).json({ error: 'Activity not found' });
+    }
+
+    // Check permission: only admin can delete (already checked by checkAdmin middleware)
+    // This check is redundant but kept for clarity
+
+    // Delete registrations first
+    await db.prepare('DELETE FROM activity_registrations WHERE activity_id = ?').run(req.params.id);
+
+    // Delete activity
+    await db.prepare('DELETE FROM activities WHERE id = ?').run(req.params.id);
+
+    res.json({ message: 'Activity deleted successfully' });
+  } catch (error) {
+    console.error('Delete activity error:', error);
+    res.status(500).json({ error: 'Failed to delete activity' });
+  }
+});
+
+module.exports = router;

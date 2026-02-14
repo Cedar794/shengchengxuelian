@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(ls:*)",
+      "Bash(npm create vite:*)",
+      "Bash(npx tailwindcss init:*)",
+      "Bash(./node_modules/.bin/tailwindcss:*)",
+      "Bash(wc:*)",
+      "Bash(npm run init-db:*)",
+      "Bash(timeout 5 npm start:*)",
+      "Bash(curl:*)",
+      "Bash(pkill:*)",
+      "Bash(npm run build:*)",
+      "Bash(node:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(lsof:*)",
+      "Bash(export:*)",
+      "Bash(find:*)",
+      "Bash(timeout 3 npm start:*)",
+      "Bash(xargs kill:*)",
+      "Bash(python3:*)",
+      "Bash(sqlite3:*)",
+      "Bash(killall:*)",
+      "Bash(grep:*)",
+      "Bash(__NEW_LINE_67fc329c315cce55__ echo \"=== 验证 await 修复 ===\")",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6Miwicm9sZSI6InN0dWRlbnQiLCJpYXQiOjE3NzA3MjAyNzUsImV4cCI6MTc3MTMyNTA3NX0.t3g0ZbWEf1bTvtldmMWzawd4DoAA6tuOmC5Yntj134k\")",
+      "Bash(chmod:*)",
+      "Bash(/tmp/add_demo_data.sh:*)",
+      "Bash(npm start)",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MTIsInJvbGUiOiJzdHVkZW50IiwiaWF0IjoxNzcwODc0ODEyLCJleHAiOjE3NzE0Nzk2MTJ9.52hE6wMogf5geJrh0bWhlIMf990uRKAIjFlOCzlGH7I\")",
+      "Bash(NO_PROXY=localhost curl:*)"
+    ]
+  }
+}

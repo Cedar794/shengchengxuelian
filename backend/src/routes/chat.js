@@ -1,0 +1,204 @@
+const express = require('express');
+const router = express.Router();
+const db = require('../database');
+const { auth } = require('../middleware/auth');
+
+// Simple UUID generator
+function generateUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+// Get or create random match (anonymous chat)
+router.post('/random-match', auth, async (req, res) => {
+  try {
+    const { tags } = req.body;
+
+    // Find existing active session looking for match
+    const existingSession = await db.prepare(`
+      SELECT * FROM chat_sessions
+      WHERE user2_id IS NULL AND user1_id != ? AND status = 'active'
+      ORDER BY created_at DESC
+      LIMIT 1
+    `).get(req.user.id);
+
+    let session;
+
+    if (existingSession) {
+      // Join existing session
+      const sessionId = existingSession.id;
+
+      // Generate anonymous nicknames
+      const user1Nickname = `User${Math.floor(Math.random() * 10000)}`;
+      const user2Nickname = `User${Math.floor(Math.random() * 10000)}`;
+
+      await db.prepare(`
+        UPDATE chat_sessions
+        SET user2_id = ?, user1_nickname = ?, user2_nickname = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(req.user.id, user1Nickname, user2Nickname, sessionId);
+
+      session = await db.prepare('SELECT * FROM chat_sessions WHERE id = ?').get(sessionId);
+    } else {
+      // Create new session waiting for match
+      const sessionId = generateUUID();
+      const userTags = tags ? JSON.stringify(tags) : null;
+
+      await db.prepare(`
+        INSERT INTO chat_sessions (id, user1_id, tags)
+        VALUES (?, ?, ?)
+      `).run(sessionId, req.user.id, userTags);
+
+      session = await db.prepare('SELECT * FROM chat_sessions WHERE id = ?').get(sessionId);
+    }
+
+    res.json({ session, isNew: !existingSession });
+  } catch (error) {
+    console.error('Random match error:', error);
+    res.status(500).json({ error: 'Failed to find match' });
+  }
+});
+
+// Get session messages
+router.get('/sessions/:sessionId/messages', auth, async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+
+    // Check if user is part of this session
+    const session = await db.prepare('SELECT * FROM chat_sessions WHERE id = ?').get(sessionId);
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    if (session.user1_id !== req.user.id && session.user2_id !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized to access this session' });
+    }
+
+    // Get messages
+    const messages = await db.prepare(`
+      SELECT m.*,
+             CASE WHEN m.sender_id = ? THEN ? ELSE '?' END as sender_display_name
+      FROM messages m
+      WHERE m.session_id = ?
+      ORDER BY m.created_at ASC
+    `).all(req.user.id, session.user1_id === req.user.id ? session.user1_nickname : session.user2_nickname, sessionId);
+
+    res.json({ messages, session });
+  } catch (error) {
+    console.error('Get session messages error:', error);
+    res.status(500).json({ error: 'Failed to get messages' });
+  }
+});
+
+// Send message
+router.post('/sessions/:sessionId/messages', auth, async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { content } = req.body;
+
+    if (!content) {
+      return res.status(400).json({ error: 'Message content is required' });
+    }
+
+    // Check if user is part of this session
+    const session = await db.prepare('SELECT * FROM chat_sessions WHERE id = ?').get(sessionId);
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    if (session.user1_id !== req.user.id && session.user2_id !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized to access this session' });
+    }
+
+    if (!session.user2_id) {
+      return res.status(400).json({ error: 'Session not ready' });
+    }
+
+    // Insert message
+    const result = await db.prepare(`
+      INSERT INTO messages (session_id, sender_id, content, is_anonymous)
+      VALUES (?, ?, ?, 1)
+    `).run(sessionId, req.user.id, content);
+
+    const message = await db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
+
+    res.status(201).json({ message });
+  } catch (error) {
+    console.error('Send message error:', error);
+    res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+// Exchange contact info
+router.post('/sessions/:sessionId/exchange-contact', auth, async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+
+    const session = await db.prepare('SELECT * FROM chat_sessions WHERE id = ?').get(sessionId);
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    if (session.user1_id !== req.user.id && session.user2_id !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    await db.prepare('UPDATE chat_sessions SET contact_exchanged = 1 WHERE id = ?').run(sessionId);
+
+    res.json({ message: 'Contact info exchange initiated' });
+  } catch (error) {
+    console.error('Exchange contact error:', error);
+    res.status(500).json({ error: 'Failed to exchange contact' });
+  }
+});
+
+// End session
+router.post('/sessions/:sessionId/end', auth, async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+
+    const session = await db.prepare('SELECT * FROM chat_sessions WHERE id = ?').get(sessionId);
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    if (session.user1_id !== req.user.id && session.user2_id !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    await db.prepare('UPDATE chat_sessions SET status = "ended" WHERE id = ?').run(sessionId);
+
+    res.json({ message: 'Session ended' });
+  } catch (error) {
+    console.error('End session error:', error);
+    res.status(500).json({ error: 'Failed to end session' });
+  }
+});
+
+// Get my chat sessions
+router.get('/sessions/my', auth, async (req, res) => {
+  try {
+    const sessions = await db.prepare(`
+      SELECT cs.*,
+             CASE WHEN cs.user1_id = ? THEN cs.user2_nickname ELSE cs.user1_nickname END as other_user_nickname,
+             (SELECT COUNT(*) FROM messages WHERE session_id = cs.id AND sender_id != ? AND read = 0) as unread_count
+      FROM chat_sessions cs
+      WHERE cs.user1_id = ? OR cs.user2_id = ?
+      ORDER BY cs.updated_at DESC
+    `).all(req.user.id, req.user.id, req.user.id, req.user.id);
+
+    res.json({ sessions });
+  } catch (error) {
+    console.error('Get my sessions error:', error);
+    res.status(500).json({ error: 'Failed to get sessions' });
+  }
+});
+
+module.exports = router;

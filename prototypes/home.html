@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>首页 - 申城学联</title>
+    <style>
+        /* CSS Reset & Base Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                         "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            background-color: #F5F7FA;
+            color: #2C3E50;
+            line-height: 1.6;
+        }
+
+        a {
+            text-decoration: none;
+            color: inherit;
+        }
+
+        ul {
+            list-style: none;
+        }
+
+        /* Container */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Navigation Bar */
+        .navbar {
+            background: #FFFFFF;
+            height: 56px;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .navbar-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 20px;
+            font-weight: 600;
+            color: #4A90D9;
+        }
+
+        .navbar-brand img {
+            height: 32px;
+        }
+
+        .navbar-menu {
+            display: flex;
+            gap: 32px;
+        }
+
+        .navbar-link {
+            color: #5A6C7D;
+            font-size: 14px;
+            transition: color 0.25s;
+            position: relative;
+        }
+
+        .navbar-link:hover,
+        .navbar-link.active {
+            color: #4A90D9;
+        }
+
+        .navbar-link.active::after {
+            content: '';
+            position: absolute;
+            bottom: -18px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #4A90D9;
+        }
+
+        .navbar-actions {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+            transition: all 0.25s;
+        }
+
+        .btn-sm {
+            padding: 4px 12px;
+            font-size: 12px;
+            height: 28px;
+        }
+
+        .btn-primary {
+            background: #4A90D9;
+            color: #FFFFFF;
+        }
+
+        .btn-primary:hover {
+            background: #5A9FE8;
+        }
+
+        .btn-secondary {
+            background: #FFFFFF;
+            color: #4A90D9;
+            border: 1px solid #4A90D9;
+        }
+
+        .btn-secondary:hover {
+            background: #E3F0FD;
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: #4A90D9;
+        }
+
+        .btn-ghost:hover {
+            background: #E3F0FD;
+        }
+
+        /* Hero Carousel */
+        .hero {
+            height: 400px;
+            background: linear-gradient(135deg, #4A90D9, #7BB3E8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #FFFFFF;
+            text-align: center;
+        }
+
+        .hero-content h1 {
+            font-size: 36px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .hero-content p {
+            font-size: 18px;
+            opacity: 0.9;
+        }
+
+        /* Quick Links */
+        .quick-links {
+            background: #FFFFFF;
+            padding: 32px 0;
+            margin-bottom: 24px;
+        }
+
+        .quick-links-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+        }
+
+        .quick-link-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            padding: 24px;
+            border-radius: 8px;
+            background: #FFFFFF;
+            border: 1px solid #E0E6ED;
+            transition: all 0.25s;
+            cursor: pointer;
+        }
+
+        .quick-link-item:hover {
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+            transform: translateY(-2px);
+        }
+
+        .quick-link-icon {
+            width: 64px;
+            height: 64px;
+            background: #E3F0FD;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+        }
+
+        .quick-link-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: #2C3E50;
+        }
+
+        .quick-link-desc {
+            font-size: 12px;
+            color: #8C8C8C;
+        }
+
+        /* Main Content Grid */
+        .main-content {
+            padding: 24px 0;
+        }
+
+        .content-grid {
+            display: grid;
+            grid-template-columns: 1.8fr 1fr;
+            gap: 24px;
+        }
+
+        /* Section */
+        .section {
+            background: #FFFFFF;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            margin-bottom: 24px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #E0E6ED;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2C3E50;
+        }
+
+        .section-more {
+            font-size: 14px;
+            color: #4A90D9;
+        }
+
+        /* Material Card */
+        .material-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .material-item {
+            display: flex;
+            gap: 16px;
+            padding: 16px;
+            border-radius: 8px;
+            background: #F5F7FA;
+            transition: all 0.25s;
+        }
+
+        .material-item:hover {
+            background: #E3F0FD;
+            box-shadow: 0 2px 8px rgba(74, 144, 217, 0.15);
+        }
+
+        .material-icon {
+            width: 48px;
+            height: 48px;
+            background: #4A90D9;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+
+        .material-content {
+            flex: 1;
+        }
+
+        .material-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: #2C3E50;
+            margin-bottom: 6px;
+        }
+
+        .material-meta {
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+            color: #8C8C8C;
+            margin-bottom: 8px;
+        }
+
+        .material-desc {
+            font-size: 13px;
+            color: #5A6C7D;
+            line-height: 1.5;
+        }
+
+        /* Community Card */
+        .community-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .community-item {
+            display: flex;
+            gap: 12px;
+            padding: 16px;
+            border-radius: 8px;
+            background: #F5F7FA;
+            transition: all 0.25s;
+        }
+
+        .community-item:hover {
+            background: #E3F0FD;
+        }
+
+        .community-avatar {
+            width: 48px;
+            height: 48px;
+            background: #7BB3E8;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .community-info {
+            flex: 1;
+        }
+
+        .community-name {
+            font-size: 15px;
+            font-weight: 500;
+            color: #2C3E50;
+            margin-bottom: 4px;
+        }
+
+        .community-tags {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 6px;
+        }
+
+        .tag {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .tag-default {
+            background: #E3F0FD;
+            color: #4A90D9;
+        }
+
+        .community-stats {
+            font-size: 12px;
+            color: #8C8C8C;
+        }
+
+        /* Activity Card (Sidebar) */
+        .activity-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .activity-item {
+            display: flex;
+            gap: 12px;
+            padding: 12px;
+            border-radius: 8px;
+            background: #F5F7FA;
+            transition: all 0.25s;
+        }
+
+        .activity-item:hover {
+            background: #E3F0FD;
+        }
+
+        .activity-thumb {
+            width: 80px;
+            height: 60px;
+            background: #E0E6ED;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+
+        .activity-info {
+            flex: 1;
+        }
+
+        .activity-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: #2C3E50;
+            margin-bottom: 4px;
+            line-height: 1.4;
+        }
+
+        .activity-meta {
+            font-size: 11px;
+            color: #8C8C8C;
+        }
+
+        .tag-hot {
+            background: #FFF1F0;
+            color: #F5222D;
+        }
+
+        .tag-success {
+            background: #F6FFED;
+            color: #52C41A;
+        }
+
+        /* Hot Tags */
+        .hot-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .hot-tag {
+            padding: 6px 12px;
+            background: #F5F7FA;
+            border-radius: 20px;
+            font-size: 13px;
+            color: #5A6C7D;
+            transition: all 0.25s;
+        }
+
+        .hot-tag:hover {
+            background: #4A90D9;
+            color: #FFFFFF;
+        }
+
+        /* Footer */
+        .footer {
+            background: #2C3E50;
+            color: #FFFFFF;
+            padding: 32px 0;
+            margin-top: 48px;
+        }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+            flex-wrap: wrap;
+        }
+
+        .footer-link {
+            color: #FFFFFF;
+            font-size: 14px;
+            opacity: 0.8;
+            transition: opacity 0.25s;
+        }
+
+        .footer-link:hover {
+            opacity: 1;
+        }
+
+        .footer-copyright {
+            text-align: center;
+            margin-top: 24px;
+            font-size: 12px;
+            opacity: 0.6;
+        }
+
+        /* AI Assistant FAB */
+        .fab-xiaolian {
+            position: fixed;
+            left: 24px;
+            bottom: 24px;
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, #4A90D9, #7BB3E8);
+            border-radius: 50%;
+            box-shadow: 0 4px 16px rgba(74, 144, 217, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            cursor: pointer;
+            z-index: 1000;
+            transition: all 0.25s;
+        }
+
+        .fab-xiaolian:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(74, 144, 217, 0.5);
+        }
+
+        /* Icon styles */
+        .icon {
+            display: inline-block;
+            width: 1em;
+            height: 1em;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .quick-links-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .content-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .navbar-menu {
+                display: none;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .quick-links-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="navbar-container">
+            <a class="navbar-brand" href="/">
+                <span>🎓</span>
+                申城学联
+            </a>
+            <ul class="navbar-menu">
+                <li><a class="navbar-link active" href="/">首页</a></li>
+                <li><a class="navbar-link" href="/campus">校园通</a></li>
+                <li><a class="navbar-link" href="/market">生活汇</a></li>
+                <li><a class="navbar-link" href="/community">校际圈</a></li>
+            </ul>
+            <div class="navbar-actions">
+                <button class="btn btn-ghost btn-sm">
+                    <span>🔍</span> 搜索
+                </button>
+                <a class="navbar-link" href="/login">登录</a>
+                <button class="btn btn-primary btn-sm">注册</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <h1>连接申城高校，共享智慧校园</h1>
+            <p>一站式校园服务平台，活动、交易、协作，尽在申城学联</p>
+        </div>
+    </section>
+
+    <!-- Quick Links -->
+    <section class="quick-links">
+        <div class="container">
+            <div class="quick-links-grid">
+                <div class="quick-link-item">
+                    <div class="quick-link-icon">📅</div>
+                    <div class="quick-link-title">活动公告</div>
+                    <div class="quick-link-desc">发现精彩活动</div>
+                </div>
+                <div class="quick-link-item">
+                    <div class="quick-link-icon">💰</div>
+                    <div class="quick-link-title">二手交易</div>
+                    <div class="quick-link-desc">便捷校园交易</div>
+                </div>
+                <div class="quick-link-item">
+                    <div class="quick-link-icon">👥</div>
+                    <div class="quick-link-title">社群交流</div>
+                    <div class="quick-link-desc">跨校兴趣社群</div>
+                </div>
+                <div class="quick-link-item">
+                    <div class="quick-link-icon">🏢</div>
+                    <div class="quick-link-title">场馆预约</div>
+                    <div class="quick-link-desc">在线快速预约</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            <div class="content-grid">
+                <!-- Left Column -->
+                <div class="main-column">
+                    <!-- Materials Section -->
+                    <section class="section">
+                        <div class="section-header">
+                            <h2 class="section-title">📚 资料分享</h2>
+                            <a class="section-more" href="/campus/materials">查看更多 →</a>
+                        </div>
+                        <div class="material-list">
+                            <div class="material-item">
+                                <div class="material-icon">📄</div>
+                                <div class="material-content">
+                                    <h3 class="material-title">"挑战杯"全国大学生创业计划竞赛全流程指南（2026版）</h3>
+                                    <div class="material-meta">
+                                        <span>📋 PDF文档</span>
+                                        <span>📊 12.5 MB</span>
+                                        <span>⬇️ 1247次下载</span>
+                                    </div>
+                                    <p class="material-desc">涵盖选题、组队、申报、答辩全环节，附往届获奖案例</p>
+                                </div>
+                            </div>
+                            <div class="material-item">
+                                <div class="material-icon">🎨</div>
+                                <div class="material-content">
+                                    <h3 class="material-title">校园活动海报设计模板合集（PS/AI/Canva）</h3>
+                                    <div class="material-meta">
+                                        <span>📦 压缩包</span>
+                                        <span>📊 85.3 MB</span>
+                                        <span>⬇️ 892次下载</span>
+                                    </div>
+                                    <p class="material-desc">适用于招新、讲座、比赛等场景，附使用教程</p>
+                                </div>
+                            </div>
+                            <div class="material-item">
+                                <div class="material-icon">📝</div>
+                                <div class="material-content">
+                                    <h3 class="material-title">大一新生选课避坑指南（学生共创版）</h3>
+                                    <div class="material-meta">
+                                        <span>📋 PDF文档</span>
+                                        <span>📊 2.8 MB</span>
+                                        <span>⬇️ 634次下载</span>
+                                    </div>
+                                    <p class="material-desc">课程难度评价、教师风格、考核方式等真实反馈</p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Communities Section -->
+                    <section class="section">
+                        <div class="section-header">
+                            <h2 class="section-title">👥 主题社群</h2>
+                            <a class="section-more" href="/community">查看更多 →</a>
+                        </div>
+                        <div class="community-list">
+                            <div class="community-item">
+                                <div class="community-avatar">🐍</div>
+                                <div class="community-info">
+                                    <h3 class="community-name">Python数据分析学习小组</h3>
+                                    <div class="community-tags">
+                                        <span class="tag tag-default">编程</span>
+                                        <span class="tag tag-default">数据科学</span>
+                                    </div>
+                                    <p class="community-stats">👥 127人 · 🏫 来自8所高校</p>
+                                </div>
+                            </div>
+                            <div class="community-item">
+                                <div class="community-avatar">🏀</div>
+                                <div class="community-info">
+                                    <h3 class="community-name">跨校篮球爱好者联盟</h3>
+                                    <div class="community-tags">
+                                        <span class="tag tag-default">体育</span>
+                                        <span class="tag tag-default">运动</span>
+                                    </div>
+                                    <p class="community-stats">👥 89人 · 每月一场友谊赛</p>
+                                </div>
+                            </div>
+                            <div class="community-item">
+                                <div class="community-avatar">📸</div>
+                                <div class="community-info">
+                                    <h3 class="community-name">校园摄影爱好者协会</h3>
+                                    <div class="community-tags">
+                                        <span class="tag tag-default">摄影</span>
+                                        <span class="tag tag-default">艺术</span>
+                                    </div>
+                                    <p class="community-stats">👥 203人 · 每周外拍活动</p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Right Column (Sidebar) -->
+                <aside class="sidebar">
+                    <!-- Activities -->
+                    <section class="section">
+                        <div class="section-header">
+                            <h2 class="section-title">📢 活动公告</h2>
+                            <a class="section-more" href="/campus/activities">更多 →</a>
+                        </div>
+                        <div class="activity-list">
+                            <div class="activity-item">
+                                <div class="activity-thumb">🏃</div>
+                                <div class="activity-info">
+                                    <h3 class="activity-title">第三十六届申城高校联合运动会开幕式</h3>
+                                    <div class="activity-meta">
+                                        <span class="tag tag-success">报名中</span>
+                                        <span>04-25</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="activity-item">
+                                <div class="activity-thumb">🤖</div>
+                                <div class="activity-info">
+                                    <h3 class="activity-title">"智慧校园"系列讲座：人工智能在校园中的应用</h3>
+                                    <div class="activity-meta">
+                                        <span class="tag tag-success">报名中</span>
+                                        <span>03-20</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="activity-item">
+                                <div class="activity-thumb">🎤</div>
+                                <div class="activity-info">
+                                    <h3 class="activity-title">春季社团招新宣讲会</h3>
+                                    <div class="activity-meta">
+                                        <span class="tag tag-success">报名中</span>
+                                        <span>03-15</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Hot Tags -->
+                    <section class="section">
+                        <div class="section-header">
+                            <h2 class="section-title">🔥 热门标签</h2>
+                        </div>
+                        <div class="hot-tags">
+                            <span class="hot-tag">#考研</span>
+                            <span class="hot-tag">#竞赛</span>
+                            <span class="hot-tag">#创业</span>
+                            <span class="hot-tag">#实习</span>
+                            <span class="hot-tag">#兼职</span>
+                            <span class="hot-tag">#技能</span>
+                            <span class="hot-tag">#Python</span>
+                            <span class="hot-tag">#摄影</span>
+                            <span class="hot-tag">#篮球</span>
+                            <span class="hot-tag">#音乐</span>
+                        </div>
+                    </section>
+
+                    <!-- Recent Activity -->
+                    <section class="section">
+                        <div class="section-header">
+                            <h2 class="section-title">⚡ 最新动态</h2>
+                        </div>
+                        <div class="material-list">
+                            <div class="material-item" style="padding: 12px;">
+                                <div class="material-content">
+                                    <p class="material-desc">💬 张三加入了 <strong>Python数据分析学习小组</strong></p>
+                                    <p class="material-meta">2分钟前</p>
+                                </div>
+                            </div>
+                            <div class="material-item" style="padding: 12px;">
+                                <div class="material-content">
+                                    <p class="material-desc">📦 李四发布了商品 <strong>九成新《管理学》教材</strong></p>
+                                    <p class="material-meta">5分钟前</p>
+                                </div>
+                            </div>
+                            <div class="material-item" style="padding: 12px;">
+                                <div class="material-content">
+                                    <p class="material-desc">🎉 王五创建了社群 <strong>跨校创业联盟</strong></p>
+                                    <p class="material-meta">10分钟前</p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </aside>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-links">
+                <a class="footer-link" href="/about">关于我们</a>
+                <a class="footer-link" href="/help">帮助中心</a>
+                <a class="footer-link" href="/partners">合作伙伴</a>
+                <a class="footer-link" href="/contact">联系我们</a>
+                <a class="footer-link" href="/copyright">版权声明</a>
+            </div>
+            <p class="footer-copyright">© 2026 申城学联 All Rights Reserved</p>
+        </div>
+    </footer>
+
+    <!-- AI Assistant FAB -->
+    <div class="fab-xiaolian" title="点击展开聊天窗口">
+        🤖
+    </div>
+
+    <script>
+        // Simple interaction demo
+        document.querySelector('.fab-xiaolian').addEventListener('click', function() {
+            alert('小联聊天窗口即将展开～');
+        });
+
+        // Add hover effects
+        document.querySelectorAll('.quick-link-item, .material-item, .community-item').forEach(item => {
+            item.style.cursor = 'pointer';
+        });
+    </script>
+</body>
+</html>

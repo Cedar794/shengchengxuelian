@@ -1,0 +1,202 @@
+const express = require('express');
+const router = express.Router();
+const db = require('../database');
+const { auth, optionalAuth } = require('../middleware/auth');
+const { body, validationResult } = require('express-validator');
+
+// Get all listings with filters
+router.get('/', optionalAuth, (req, res) => {
+  try {
+    const { type, category, school, status = 'active', search, page = 1, limit = 20 } = req.query;
+    const offset = (page - 1) * limit;
+
+    let query = `
+      SELECT l.*, u.nickname as seller_name, u.avatar as seller_avatar, u.school as seller_school
+      FROM listings l
+      JOIN users u ON l.seller_id = u.id
+      WHERE l.status = ?
+    `;
+    const params = [status];
+
+    if (type) {
+      query += ' AND l.type = ?';
+      params.push(type);
+    }
+    if (category) {
+      query += ' AND l.category = ?';
+      params.push(category);
+    }
+    if (school) {
+      query += ' AND l.school = ?';
+      params.push(school);
+    }
+    if (search) {
+      query += ' AND (l.title LIKE ? OR l.description LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`);
+    }
+
+    query += ' ORDER BY l.created_at DESC LIMIT ? OFFSET ?';
+    params.push(parseInt(limit), offset);
+
+    const listings = db.prepare(query).all(...params);
+
+    // Parse JSON fields
+    listings.forEach(listing => {
+      if (listing.images) listing.images = JSON.parse(listing.images);
+      if (listing.tags) listing.tags = JSON.parse(listing.tags);
+    });
+
+    res.json({ listings, page: parseInt(page), limit: parseInt(limit) });
+  } catch (error) {
+    console.error('Get listings error:', error);
+    res.status(500).json({ error: 'Failed to get listings' });
+  }
+});
+
+// Get single listing
+router.get('/:id', optionalAuth, (req, res) => {
+  try {
+    const listing = db.prepare(`
+      SELECT l.*, u.nickname as seller_name, u.avatar as seller_avatar, u.school as seller_school, u.major as seller_major
+      FROM listings l
+      JOIN users u ON l.seller_id = u.id
+      WHERE l.id = ?
+    `).get(req.params.id);
+
+    if (!listing) {
+      return res.status(404).json({ error: 'Listing not found' });
+    }
+
+    // Parse JSON fields
+    if (listing.images) listing.images = JSON.parse(listing.images);
+    if (listing.tags) listing.tags = JSON.parse(listing.tags);
+
+    // Increment view count
+    db.prepare('UPDATE listings SET view_count = view_count + 1 WHERE id = ?').run(req.params.id);
+
+    res.json({ listing });
+  } catch (error) {
+    console.error('Get listing error:', error);
+    res.status(500).json({ error: 'Failed to get listing' });
+  }
+});
+
+// Create listing
+router.post('/', auth, [
+  body('type').notEmpty().withMessage('Type is required'),
+  body('title').notEmpty().withMessage('Title is required'),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { type, title, description, price, category, condition, images, location, tags } = req.body;
+
+    const user = db.prepare('SELECT school FROM users WHERE id = ?').get(req.user.id);
+
+    const result = db.prepare(`
+      INSERT INTO listings (type, title, description, price, category, condition, images, seller_id, school, location, tags)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(type, title, description, price, category, condition, images ? JSON.stringify(images) : null, req.user.id, user.school, location, tags ? JSON.stringify(tags) : null);
+
+    const listing = db.prepare('SELECT * FROM listings WHERE id = ?').get(result.lastInsertRowid);
+
+    res.status(201).json({ message: 'Listing created successfully', listing });
+  } catch (error) {
+    console.error('Create listing error:', error);
+    res.status(500).json({ error: 'Failed to create listing' });
+  }
+});
+
+// Update listing
+router.put('/:id', auth, (req, res) => {
+  try {
+    const listing = db.prepare('SELECT * FROM listings WHERE id = ?').get(req.params.id);
+
+    if (!listing) {
+      return res.status(404).json({ error: 'Listing not found' });
+    }
+
+    if (listing.seller_id !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized to update this listing' });
+    }
+
+    const { title, description, price, status, condition, images, location } = req.body;
+
+    db.prepare(`
+      UPDATE listings
+      SET title = COALESCE(?, title),
+          description = COALESCE(?, description),
+          price = COALESCE(?, price),
+          status = COALESCE(?, status),
+          condition = COALESCE(?, condition),
+          images = COALESCE(?, images),
+          location = COALESCE(?, location),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(title, description, price, status, condition, images ? JSON.stringify(images) : null, location, req.params.id);
+
+    const updatedListing = db.prepare('SELECT * FROM listings WHERE id = ?').get(req.params.id);
+
+    res.json({ message: 'Listing updated successfully', listing: updatedListing });
+  } catch (error) {
+    console.error('Update listing error:', error);
+    res.status(500).json({ error: 'Failed to update listing' });
+  }
+});
+
+// Delete listing
+router.delete('/:id', auth, (req, res) => {
+  try {
+    const listing = db.prepare('SELECT * FROM listings WHERE id = ?').get(req.params.id);
+
+    if (!listing) {
+      return res.status(404).json({ error: 'Listing not found' });
+    }
+
+    if (listing.seller_id !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized to delete this listing' });
+    }
+
+    db.prepare('UPDATE listings SET status = "deleted" WHERE id = ?').run(req.params.id);
+
+    res.json({ message: 'Listing deleted successfully' });
+  } catch (error) {
+    console.error('Delete listing error:', error);
+    res.status(500).json({ error: 'Failed to delete listing' });
+  }
+});
+
+// Get my listings
+router.get('/my/listings', auth, (req, res) => {
+  try {
+    const { status } = req.query;
+
+    let query = 'SELECT * FROM listings WHERE seller_id = ?';
+    const params = [req.user.id];
+
+    if (status) {
+      query += ' AND status = ?';
+      params.push(status);
+    }
+
+    query += ' ORDER BY created_at DESC';
+
+    const listings = db.prepare(query).all(...params);
+
+    // Parse JSON fields
+    listings.forEach(listing => {
+      if (listing.images) listing.images = JSON.parse(listing.images);
+      if (listing.tags) listing.tags = JSON.parse(listing.tags);
+    });
+
+    res.json({ listings });
+  } catch (error) {
+    console.error('Get my listings error:', error);
+    res.status(500).json({ error: 'Failed to get listings' });
+  }
+});
+
+module.exports = router;

@@ -1,0 +1,203 @@
+const express = require('express');
+const router = express.Router();
+const db = require('../database');
+const { auth } = require('../middleware/auth');
+const { body, validationResult } = require('express-validator');
+
+// Create order
+router.post('/', auth, [
+  body('listing_id').notEmpty().withMessage('Listing ID is required'),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { listing_id, amount, notes } = req.body;
+
+    // Get listing
+    const listing = await db.prepare('SELECT * FROM listings WHERE id = ?').get(listing_id);
+    if (!listing) {
+      return res.status(404).json({ error: 'Listing not found' });
+    }
+
+    if (listing.seller_id === req.user.id) {
+      return res.status(400).json({ error: 'Cannot buy your own listing' });
+    }
+
+    if (listing.status !== 'active') {
+      return res.status(400).json({ error: 'Listing is not available' });
+    }
+
+    const result = await db.prepare(`
+      INSERT INTO orders (listing_id, buyer_id, seller_id, amount, notes)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(listing_id, req.user.id, listing.seller_id, amount || listing.price, notes);
+
+    // Update listing status
+    await db.prepare('UPDATE listings SET status = "reserved" WHERE id = ?').run(listing_id);
+
+    const order = await db.prepare(`
+      SELECT o.*, l.title as listing_title
+      FROM orders o
+      JOIN listings l ON o.listing_id = l.id
+      WHERE o.id = ?
+    `).get(result.lastInsertRowid);
+
+    res.status(201).json({ message: 'Order created successfully', order });
+  } catch (error) {
+    console.error('Create order error:', error);
+    res.status(500).json({ error: 'Failed to create order' });
+  }
+});
+
+// Get order by ID
+router.get('/:id', auth, async (req, res) => {
+  try {
+    const order = await db.prepare(`
+      SELECT o.*,
+             l.title as listing_title, l.images as listing_images, l.type as listing_type,
+             buyer.nickname as buyer_name, buyer.avatar as buyer_avatar,
+             seller.nickname as seller_name, seller.avatar as seller_avatar
+      FROM orders o
+      JOIN listings l ON o.listing_id = l.id
+      JOIN users buyer ON o.buyer_id = buyer.id
+      JOIN users seller ON o.seller_id = seller.id
+      WHERE o.id = ?
+    `).get(req.params.id);
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    // Check access
+    if (order.buyer_id !== req.user.id && order.seller_id !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized to view this order' });
+    }
+
+    // Parse images
+    if (order.listing_images) order.listing_images = JSON.parse(order.listing_images);
+
+    res.json({ order });
+  } catch (error) {
+    console.error('Get order error:', error);
+    res.status(500).json({ error: 'Failed to get order' });
+  }
+});
+
+// Get my orders
+router.get('/my/orders', auth, async (req, res) => {
+  try {
+    const { role, status } = req.query; // role: 'buyer' or 'seller'
+
+    let query = `
+      SELECT o.*,
+             l.title as listing_title, l.images as listing_images, l.type as listing_type,
+             CASE WHEN o.buyer_id = ? THEN 'buyer' ELSE 'seller' END as my_role
+      FROM orders o
+      JOIN listings l ON o.listing_id = l.id
+      WHERE (o.buyer_id = ? OR o.seller_id = ?)
+    `;
+    const params = [req.user.id, req.user.id, req.user.id];
+
+    if (role) {
+      if (role === 'buyer') {
+        query += ' AND o.buyer_id = ?';
+        params.push(req.user.id);
+      } else if (role === 'seller') {
+        query += ' AND o.seller_id = ?';
+        params.push(req.user.id);
+      }
+    }
+
+    if (status) {
+      query += ' AND o.status = ?';
+      params.push(status);
+    }
+
+    query += ' ORDER BY o.created_at DESC';
+
+    const orders = await db.prepare(query).all(...params);
+
+    // Parse images
+    orders.forEach(order => {
+      if (order.listing_images) order.listing_images = JSON.parse(order.listing_images);
+    });
+
+    res.json({ orders });
+  } catch (error) {
+    console.error('Get my orders error:', error);
+    res.status(500).json({ error: 'Failed to get orders' });
+  }
+});
+
+// Update order status
+router.put('/:id/status', auth, async (req, res) => {
+  try {
+    const { status } = req.body;
+
+    const order = await db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    // Check access
+    if (order.buyer_id !== req.user.id && order.seller_id !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized to update this order' });
+    }
+
+    // Validate status transitions
+    const validStatuses = ['pending', 'paid', 'shipped', 'completed', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+
+    await db.prepare('UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(status, req.params.id);
+
+    // If order is completed or cancelled, update listing status
+    if (status === 'completed' || status === 'cancelled') {
+      await db.prepare('UPDATE listings SET status = "sold" WHERE id = ?').run(order.listing_id);
+    }
+
+    const updatedOrder = await db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+
+    res.json({ message: 'Order status updated successfully', order: updatedOrder });
+  } catch (error) {
+    console.error('Update order status error:', error);
+    res.status(500).json({ error: 'Failed to update order status' });
+  }
+});
+
+// Cancel order
+router.delete('/:id', auth, async (req, res) => {
+  try {
+    const order = await db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    // Only buyer can cancel
+    if (order.buyer_id !== req.user.id) {
+      return res.status(403).json({ error: 'Only buyer can cancel order' });
+    }
+
+    if (order.status !== 'pending') {
+      return res.status(400).json({ error: 'Cannot cancel order in current status' });
+    }
+
+    await db.prepare('UPDATE orders SET status = "cancelled", updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(req.params.id);
+
+    // Update listing status back to active
+    await db.prepare('UPDATE listings SET status = "active" WHERE id = ?').run(order.listing_id);
+
+    res.json({ message: 'Order cancelled successfully' });
+  } catch (error) {
+    console.error('Cancel order error:', error);
+    res.status(500).json({ error: 'Failed to cancel order' });
+  }
+});
+
+module.exports = router;
