@@ -6,8 +6,10 @@ import {
   MessageSquare,
   Search,
   Plus,
+  Kanban,
 } from 'lucide-react';
 import { CommunityCard, ProjectCard } from '../components/common/Card';
+import KanbanBoard from '../components/common/KanbanBoard';
 
 const tabs = [
   {
@@ -218,7 +220,33 @@ const Social = () => {
               </Link>
             </div>
 
+            {/* Kanban Board Section - GitHub风格看板 */}
+            <div className="mb-8 bg-white rounded-xl shadow-sm p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                  <Kanban className="w-5 h-5 text-primary" />
+                  项目协作看板
+                </h3>
+                <span className="text-sm text-gray-500">GitHub 风格任务管理</span>
+              </div>
+              <KanbanBoard
+                tasks={[
+                  { id: 1, title: '前端框架搭建', description: '选择并配置React框架', status: 'done', priority: 'high', tags: ['前端', 'React'], due_date: '2025-03-01' },
+                  { id: 2, title: 'API接口设计', description: '设计RESTful API规范', status: 'done', priority: 'high', tags: ['后端', 'API'], due_date: '2025-03-05' },
+                  { id: 3, title: '数据库模型设计', description: '设计数据库表结构', status: 'in_progress', priority: 'normal', tags: ['数据库'], assignee_id: 1, due_date: '2025-03-10' },
+                  { id: 4, title: '用户认证模块', description: '实现登录注册功能', status: 'in_progress', priority: 'high', tags: ['认证', '安全'], assignee_id: 2, due_date: '2025-03-12' },
+                  { id: 5, title: 'UI组件库集成', description: '引入Tailwind CSS组件', status: 'todo', priority: 'normal', tags: ['UI'], due_date: '2025-03-15' },
+                  { id: 6, title: '单元测试编写', description: '为核心模块编写测试', status: 'todo', priority: 'low', tags: ['测试'], due_date: '2025-03-20' },
+                  { id: 7, title: '部署文档编写', description: '编写部署和运维文档', status: 'todo', priority: 'low', tags: ['文档'] },
+                ]}
+                onTaskMove={(taskId, newStatus) => console.log('Move task', taskId, 'to', newStatus)}
+                onTaskClick={(task) => console.log('Task clicked:', task)}
+                onAddTask={(columnId) => console.log('Add task to', columnId)}
+              />
+            </div>
+
             {/* Project Grid */}
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">全部项目</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {projects.map((project) => (
                 <ProjectCard key={project.id} project={project} />

@@ -9,6 +9,7 @@ import Social from './pages/Social';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Profile from './pages/Profile';
+import Approval from './pages/Approval';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -117,6 +118,14 @@ function AppRoutes() {
             element={
               <ProtectedRoute>
                 <Profile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/approval"
+            element={
+              <ProtectedRoute>
+                <Approval />
               </ProtectedRoute>
             }
           />

@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Bell, User, LogOut } from 'lucide-react';
+import { Bell, User, LogOut, ClipboardCheck } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const Header = () => {
@@ -57,6 +57,16 @@ const Header = () => {
         <div className="flex items-center space-x-4">
           {isAuthenticated ? (
             <>
+              <Link
+                to="/approval"
+                className={`p-2 hover:bg-gray-100 rounded-full transition-colors relative ${
+                  location.pathname === '/approval' ? 'text-primary bg-blue-50' : 'text-gray-600'
+                }`}
+                title="审批中心"
+              >
+                <ClipboardCheck className="w-5 h-5" />
+                <span className="absolute top-0 right-0 w-2 h-2 bg-orange-500 rounded-full" />
+              </Link>
               <button className="p-2 hover:bg-gray-100 rounded-full transition-colors relative">
                 <Bell className="w-5 h-5 text-gray-600" />
                 <span className="absolute top-1 right-1 w-2 h-2 bg-error rounded-full" />

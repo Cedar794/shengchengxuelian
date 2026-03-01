@@ -8,6 +8,7 @@ import {
   Lightbulb,
   ChevronRight,
   Plus,
+  AlertTriangle,
 } from 'lucide-react';
 import { ActivityCard, CollaborationCard, VenueCard, ResourceCard, TipCard } from '../components/common/Card';
 import { campusAPI } from '../api';
@@ -15,6 +16,7 @@ import { useAuth } from '../contexts/AuthContext';
 import EditModal from '../components/common/EditModal';
 import DeleteConfirmDialog from '../components/common/DeleteConfirmDialog';
 import PublishContentModal from '../components/common/PublishContentModal';
+import CalendarView from '../components/common/CalendarView';
 
 const subModules = [
   {
@@ -511,6 +513,53 @@ const Campus = () => {
               </button>
             </div>
           </div>
+
+          {/* Calendar View for Venues - 日历冲突提示功能 */}
+          {selectedModule === 'venues' && (
+            <div className="mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-700 flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-primary" />
+                  场馆预约日历
+                </h3>
+                <span className="text-sm text-gray-500">点击日期查看预约情况</span>
+              </div>
+              <CalendarView
+                reservations={[
+                  {
+                    reservation_date: new Date(Date.now() + 86400000).toISOString().split('T')[0],
+                    start_time: '09:00',
+                    end_time: '12:00',
+                    purpose: '社团活动排练',
+                    status: 'approved'
+                  },
+                  {
+                    reservation_date: new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0],
+                    start_time: '14:00',
+                    end_time: '16:00',
+                    purpose: '项目讨论会议',
+                    status: 'pending'
+                  },
+                  {
+                    reservation_date: new Date(Date.now() + 4 * 86400000).toISOString().split('T')[0],
+                    start_time: '18:00',
+                    end_time: '20:00',
+                    purpose: '羽毛球活动',
+                    status: 'approved'
+                  },
+                ]}
+                onSlotClick={(date, time) => console.log('Selected:', date, time)}
+              />
+              {/* Conflict Alert Demo - 冲突提示 */}
+              <div className="mt-4 p-3 bg-red-50 border-l-4 border-red-500 rounded-r-lg flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-red-700">预约冲突提示</p>
+                  <p className="text-sm text-red-600">您选择的时段与现有活动"团队会议"(18:00-20:00)存在冲突，建议调整时间。</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {loading ? (
             <div className="text-center text-gray-500 py-8">加载中...</div>
